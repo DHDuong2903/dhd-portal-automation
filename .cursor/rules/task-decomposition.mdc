@@ -1,0 +1,54 @@
+---
+description: Quy trình nhận diện epic và phân tách prompt thành task nhỏ, bám North Star
+alwaysApply: true
+---
+
+# Task Decomposition — bám North Star
+
+Áp dụng cho mọi prompt yêu cầu thay đổi/xây dựng. Luôn đi qua đủ 6 bước.
+
+## 4 cổng lọc tối cao (mọi task phải vượt qua)
+1. Có nằm trong vertical slice `input → validation → execution → verification → report`? Nếu không phục vụ trực tiếp → không thuộc MVP.
+2. Có đang xây lớn hơn nhu cầu đã chứng minh? (multi-portal, workflow builder tổng quát, OCR/PDF, Redis/Kafka/K8s, billing, multi-tenancy → DỪNG, hỏi lại).
+3. Có giải pháp deterministic + test được trước khi nghĩ tới AI/abstraction?
+4. Domain logic có bị trói vào DOM portal cụ thể? Nếu có → tách adapter.
+
+## Bộ Epic chuẩn (khung nhận diện)
+- E0 Repository & Environment — foundation
+- E1 Database foundation (Postgres, Prisma, migration, seed) — foundation
+- E2 Quality gates & CI (lint, typecheck, test, build, GH Actions) — foundation
+- E3 File intake (import CSV/Excel, mapping, normalization, validation, preview/confirm) — product, slice `input+validation`
+- E4 Demo portal (portal kiểm thử + dữ liệu) — product
+- E5 Browser automation (Playwright adapter: tìm SKU, update qty, verify) — product, slice `execution+verification`
+- E6 Job execution & tracking (trạng thái từng bản ghi, persistence) — product
+- E7 Reporting & safe retry — product, slice `report`
+- E8 Reliability (lỗi mạng, timeout, dữ liệu xấu, kết quả không xác định) — foundation
+- E9 Deployment (staging, smoke, migration) — foundation, CỔNG riêng
+- E10 Business validation (người dùng, điều khoản portal, chi trả) — business, song song, KHÔNG code
+
+## Quy trình 6 bước
+1. **Phân loại tầng**: business | product | engineering. Quyết định cách đo "done".
+2. **Gắn epic + lọc phạm vi**: ánh xạ vào đúng một epic; chạy bộ lọc "Ngoài phạm vi MVP"; dính → nêu rõ và hỏi lại.
+3. **Kiểm tra repo trước khi lập kế hoạch**: đọc code, conventions, env, cách chạy. Không reset/refactor nếu không có lý do kỹ thuật.
+4. **Phân tách theo lát cắt dọc**:
+   - Ưu tiên lát mỏng xuyên suốt hơn lớp dày hoàn hảo.
+   - Task nhỏ nhất vẫn tạo kết quả nghiệp vụ kiểm chứng độc lập; không viết nổi acceptance criteria → chia tiếp.
+   - Mỗi task nằm trong một khối: domain / file processing / validation / job execution / portal adapter.
+   - Tách adapter khỏi domain; domain không biết selector.
+   - Schema chỉ tạo field slice hiện tại dùng, không "để dành".
+   - Deterministic trước, AI sau (thường ngoài MVP).
+5. **Viết task theo template bắt buộc**:
+   ```
+   Task | Epic | Layer
+   Goal (kết quả nghiệp vụ, không phải "viết code X")
+   Scope: in-scope / out-of-scope
+   Dependencies
+   Acceptance criteria (nhị phân, quan sát được)
+   Verification (lệnh cụ thể: pnpm test/typecheck, e2e spec)
+   Schema impact (migration hoặc none)
+   Risks/assumptions (secrets không lộ)
+   ```
+6. **Sắp thứ tự & cổng hỏi lại**: E0→E1→E2 (CI sớm)→slice E3–E7→E8→(gate)E9→(gate)E10. Thiếu quyết định quan trọng → nêu giả định, hỏi lại, không tự dựng giải pháp lớn.
+
+## Definition of Done
+Code đã viết ≠ task hoàn thành. Chỉ done khi: đúng scope, acceptance criteria đạt, verification/tests chạy xanh, migration tương ứng, không lộ secrets, không làm hỏng luồng đang chạy, đã ghi nhận rủi ro + bước tiếp.
