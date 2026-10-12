@@ -9,8 +9,9 @@ services:
       POSTGRES_PASSWORD: portal
       POSTGRES_DB: portal_automation
 
+    # Host port 5433 avoids clashing with a native PostgreSQL on 5432.
     ports:
-      - "5432:5432"
+      - "5433:5432"
 
     volumes:
       - postgres_data:/var/lib/postgresql/data

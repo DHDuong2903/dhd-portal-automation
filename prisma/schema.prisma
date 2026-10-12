@@ -19,3 +19,138 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// ── Business status vocabulary (North Star / MVP §6.1) ──────────────────
+// UNKNOWN is deliberately distinct from FAILED: a record whose result could
+// not be confirmed (e.g. timeout after submit) must never be blind-retried.
+enum RecordStatus {
+  PENDING
+  INVALID
+  DUPLICATE
+  SKIPPED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  UNKNOWN
+}
+
+enum RunStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+}
+
+// A reusable business workflow. MVP ships exactly one: "import-leads-to-crm".
+model Workflow {
+  id          String         @id @default(cuid())
+  key         String         @unique
+  name        String
+  description String?
+  config      WorkflowConfig?
+  runs        WorkflowRun[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+// Mapping + rules for a workflow. dedupeField holds the business key used for
+// duplicate detection (MVP decision: normalized email).
+model WorkflowConfig {
+  id                      String                 @id @default(cuid())
+  workflowId              String                 @unique
+  workflow                Workflow               @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  mapping                 Json
+  validationRules         Json?
+  dedupeField             String                 @default("email")
+  integrationConnectionId String?
+  integrationConnection   IntegrationConnection? @relation(fields: [integrationConnectionId], references: [id])
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+}
+
+// Reference to a CRM connection. Never stores raw credentials — credentialRef
+// points at the secret in the configured secret store.
+model IntegrationConnection {
+  id            String           @id @default(cuid())
+  name          String
+  provider      String
+  credentialRef String?
+  config        Json?
+  configs       WorkflowConfig[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+}
+
+// Metadata for an uploaded file. File content lives outside Postgres.
+model ImportFile {
+  id          String        @id @default(cuid())
+  filename    String
+  mimeType    String
+  sizeBytes   Int
+  rowCount    Int?
+  storagePath String?
+  checksum    String?
+  runs        WorkflowRun[]
+  createdAt   DateTime      @default(now())
+}
+
+// One execution of a workflow. Counts mirror MVP §9.2.
+model WorkflowRun {
+  id            String       @id @default(cuid())
+  workflowId    String
+  workflow      Workflow     @relation(fields: [workflowId], references: [id])
+  importFileId  String?
+  importFile    ImportFile?  @relation(fields: [importFileId], references: [id])
+  status        RunStatus    @default(PENDING)
+  totalRecords  Int          @default(0)
+  successCount  Int          @default(0)
+  failedCount   Int          @default(0)
+  invalidCount  Int          @default(0)
+  skippedCount  Int          @default(0)
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime     @default(now())
+  records       RunRecord[]
+  events        RunEvent[]
+
+  @@index([workflowId])
+  @@index([status])
+}
+
+// One source row within a run. sourceRowNumber + runId is its stable identity.
+// dedupeKey is the normalized business key (e.g. email) for duplicate checks.
+model RunRecord {
+  id              String       @id @default(cuid())
+  runId           String
+  run             WorkflowRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  sourceRowNumber Int
+  sourceData      Json
+  normalizedData  Json?
+  dedupeKey       String?
+  status          RecordStatus @default(PENDING)
+  targetRecordId  String?
+  errorCode       String?
+  errorMessage    String?
+  attemptCount    Int          @default(0)
+  processedAt     DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([runId])
+  @@index([status])
+  @@index([runId, dedupeKey])
+}
+
+// Audit trail of significant run events.
+model RunEvent {
+  id        String      @id @default(cuid())
+  runId     String
+  run       WorkflowRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  type      String
+  message   String?
+  data      Json?
+  createdAt DateTime    @default(now())
+
+  @@index([runId])
+}
