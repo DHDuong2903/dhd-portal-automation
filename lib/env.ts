@@ -19,6 +19,10 @@ const envSchema = z
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
+    // Set by Next.js during `next build` ("phase-production-build"). Used to
+    // relax runtime-only checks: a build artifact is environment-agnostic and
+    // must not require the real production secret to be present.
+    NEXT_PHASE: z.string().optional(),
     // HMAC key used to sign session cookies.
     SESSION_SECRET: z
       .string()
@@ -44,6 +48,9 @@ const envSchema = z
     GOOGLE_CLIENT_SECRET: optionalString,
   })
   .superRefine((value, ctx) => {
+    // Only a concern at runtime — skip while building (no real secret present).
+    if (value.NEXT_PHASE === "phase-production-build") return;
+
     if (
       value.NODE_ENV === "production" &&
       value.SESSION_SECRET === DEV_SESSION_SECRET
