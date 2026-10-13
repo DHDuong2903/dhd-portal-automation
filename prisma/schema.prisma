@@ -13,11 +13,27 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// One-time code for password reset, delivered by email. The plaintext code is
+// never stored — only its hash. Old codes for an email are replaced on each
+// new request; expiry + attempt cap limit brute-force on the 6-digit space.
+model PasswordResetCode {
+  id        String    @id @default(cuid())
+  email     String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int       @default(0)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([email])
 }
 
 // ── Business status vocabulary (North Star / MVP §6.1) ──────────────────

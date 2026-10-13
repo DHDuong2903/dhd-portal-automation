@@ -32,6 +32,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# local scratch/cache artifacts (smoke tests, temp scripts, logs)
+.cache*
+
 # env files (can opt-in for committing if needed)
 .env*
 
